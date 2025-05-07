@@ -59,6 +59,7 @@ export class NonRealTimeVAD {
         preSpeechPadFrames: fullOptions.preSpeechPadFrames,
         minSpeechFrames: fullOptions.minSpeechFrames,
         submitUserSpeechOnPause: fullOptions.submitUserSpeechOnPause,
+        returnOriginalAudio: fullOptions.returnOriginalAudio,
       }
     )
     frameProcessor.resume()
@@ -91,7 +92,7 @@ export class NonRealTimeVAD {
     let messageContainer: FrameProcessorEvent[] = []
 
     for await (const frame of resampler.stream(inputAudio)) {
-      await this.frameProcessor.process(frame, (event) => {
+      await this.frameProcessor.process(frame.resampled, frame.original, (event) => {
         messageContainer.push(event)
       })
       for (const event of messageContainer) {

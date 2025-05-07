@@ -47,6 +47,11 @@ export interface FrameProcessorOptions {
    * If true, when the user pauses the VAD, it may trigger `onSpeechEnd`.
    */
   submitUserSpeechOnPause: boolean
+
+  /**
+   * If true, it returns the original sample rate audio on `onSpeechEnd`.
+   */
+  returnOriginalAudio: boolean
 }
 
 export const defaultLegacyFrameProcessorOptions: FrameProcessorOptions = {
@@ -57,6 +62,7 @@ export const defaultLegacyFrameProcessorOptions: FrameProcessorOptions = {
   frameSamples: 1536,
   minSpeechFrames: 3,
   submitUserSpeechOnPause: false,
+  returnOriginalAudio: true,
 }
 
 export const defaultV5FrameProcessorOptions: FrameProcessorOptions = {
@@ -67,6 +73,7 @@ export const defaultV5FrameProcessorOptions: FrameProcessorOptions = {
   frameSamples: 512,
   minSpeechFrames: 9,
   submitUserSpeechOnPause: false,
+  returnOriginalAudio: true,
 }
 
 export function validateOptions(options: FrameProcessorOptions) {
@@ -98,7 +105,8 @@ export function validateOptions(options: FrameProcessorOptions) {
 export interface FrameProcessorInterface {
   resume: () => void
   process: (
-    arr: Float32Array,
+    resampledArr: Float32Array,
+    originalArr: Float32Array,
     handleEvent: (event: FrameProcessorEvent) => any
   ) => Promise<any>
   endSegment: (handleEvent: (event: FrameProcessorEvent) => any) => {
@@ -125,7 +133,7 @@ const concatArrays = (arrays: Float32Array[]): Float32Array => {
 
 export class FrameProcessor implements FrameProcessorInterface {
   speaking: boolean = false
-  audioBuffer: { frame: Float32Array; isSpeech: boolean }[]
+  audioBuffer: { resampledFrame: Float32Array; originalFrame: Float32Array, isSpeech: boolean }[]
   redemptionCounter = 0
   speechFrameCount = 0
   active = false
@@ -175,7 +183,7 @@ export class FrameProcessor implements FrameProcessorInterface {
         return item.isSpeech ? (acc + 1) : acc
       }, 0)
       if (speechFrameCount >= this.options.minSpeechFrames) {
-        const audio = concatArrays(audioBuffer.map((item) => item.frame))
+        const audio = concatArrays(audioBuffer.map((item) => this.options.returnOriginalAudio ? item.originalFrame : item.resampledFrame))
         handleEvent({ msg: Message.SpeechEnd, audio })
       } else {
         handleEvent({ msg: Message.VADMisfire })
@@ -185,20 +193,22 @@ export class FrameProcessor implements FrameProcessorInterface {
   }
 
   process = async (
-    frame: Float32Array,
+    resampledFrame: Float32Array,
+    originalFrame: Float32Array,
     handleEvent: (event: FrameProcessorEvent) => any
   ) => {
     if (!this.active) {
       return
     }
 
-    const probs = await this.modelProcessFunc(frame)
+    const probs = await this.modelProcessFunc(resampledFrame)
     const isSpeech = probs.isSpeech >= this.options.positiveSpeechThreshold
 
-    handleEvent({ probs, msg: Message.FrameProcessed, frame })
+    handleEvent({ probs, msg: Message.FrameProcessed, frame: resampledFrame })
 
     this.audioBuffer.push({
-      frame,
+      resampledFrame,
+      originalFrame,
       isSpeech,
     })
 
@@ -238,7 +248,7 @@ export class FrameProcessor implements FrameProcessorInterface {
       }, 0)
 
       if (speechFrameCount >= this.options.minSpeechFrames) {
-        const audio = concatArrays(audioBuffer.map((item) => item.frame))
+        const audio = concatArrays(audioBuffer.map((item) => this.options.returnOriginalAudio ? item.originalFrame : item.resampledFrame))
         handleEvent({ msg: Message.SpeechEnd, audio })
       } else {
         handleEvent({ msg: Message.VADMisfire })

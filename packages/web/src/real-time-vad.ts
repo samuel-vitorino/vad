@@ -250,6 +250,7 @@ export class AudioNodeVAD {
         preSpeechPadFrames: fullOptions.preSpeechPadFrames,
         minSpeechFrames: fullOptions.minSpeechFrames,
         submitUserSpeechOnPause: fullOptions.submitUserSpeechOnPause,
+        returnOriginalAudio: fullOptions.returnOriginalAudio,
       }
     )
 
@@ -290,13 +291,22 @@ export class AudioNodeVAD {
         ) => {
           switch (ev.data?.message) {
             case Message.AudioFrame:
-              let buffer: ArrayBuffer = ev.data.data
-              if (!(buffer instanceof ArrayBuffer)) {
-                buffer = new ArrayBuffer(ev.data.data.byteLength)
-                new Uint8Array(buffer).set(new Uint8Array(ev.data.data))
+              let resampledBuffer: ArrayBuffer = ev.data.resampledBuffer
+              let originalBuffer: ArrayBuffer = ev.data.originalBuffer
+              
+              if (!(originalBuffer instanceof ArrayBuffer)) {
+                originalBuffer = new ArrayBuffer(ev.data.originalBuffer.byteLength)
+                new Uint8Array(originalBuffer).set(new Uint8Array(ev.data.originalBuffer))
               }
-              const frame = new Float32Array(buffer)
-              await this.processFrame(frame)
+              
+              if (!(resampledBuffer instanceof ArrayBuffer)) {
+                resampledBuffer = new ArrayBuffer(ev.data.resampledBuffer.byteLength)
+                new Uint8Array(resampledBuffer).set(new Uint8Array(ev.data.resampledBuffer))
+              }
+              
+              const resampledFrame = new Float32Array(resampledBuffer)
+              const originalFrame = new Float32Array(originalBuffer)
+              await this.processFrame(resampledFrame, originalFrame)
               break
           }
         }
@@ -341,8 +351,8 @@ export class AudioNodeVAD {
         // Process through resampler
         if (this.resampler) {
           const frames = this.resampler.process(input)
-          for (const frame of frames) {
-            await this.processFrame(frame)
+          for (let i = 0; i < frames.resampledBuffer.length; i++) {
+            await this.processFrame(frames.resampledBuffer[i]!, frames.originalBuffer[i]!)
           }
         }
       } catch (error) {
@@ -369,8 +379,8 @@ export class AudioNodeVAD {
     node.connect(this.audioNode)
   }
 
-  processFrame = async (frame: Float32Array) => {
-    await this.frameProcessor.process(frame, this.handleFrameProcessorEvent)
+  processFrame = async (resampledFrame: Float32Array, originalFrame: Float32Array) => {
+    await this.frameProcessor.process(resampledFrame, originalFrame, this.handleFrameProcessorEvent)
   }
 
   handleFrameProcessorEvent = (ev: FrameProcessorEvent) => {

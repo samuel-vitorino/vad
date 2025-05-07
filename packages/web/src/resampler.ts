@@ -18,19 +18,24 @@ export class Resampler {
     this.inputBuffer = []
   }
 
-  process = (audioFrame: Float32Array): Float32Array[] => {
-    const outputFrames: Array<Float32Array> = []
+  process = (audioFrame: Float32Array): {resampledBuffer: Float32Array[], originalBuffer: Float32Array[]} => {
+    const outputResampledFrames: Array<Float32Array> = []
+    const outputOriginalFrames: Array<Float32Array> = []
 
     for (const sample of audioFrame) {
       this.inputBuffer.push(sample)
 
       while (this.hasEnoughDataForFrame()) {
         const outputFrame = this.generateOutputFrame()
-        outputFrames.push(outputFrame)
+        outputResampledFrames.push(outputFrame.resampled)
+        outputOriginalFrames.push(outputFrame.original)
       }
     }
 
-    return outputFrames
+    return {
+      resampledBuffer: outputResampledFrames,
+      originalBuffer: outputOriginalFrames,
+    }
   }
 
   async *stream(audioInput: Float32Array) {
@@ -52,7 +57,7 @@ export class Resampler {
     )
   }
 
-  private generateOutputFrame(): Float32Array {
+  private generateOutputFrame(): { resampled: Float32Array, original: Float32Array } {
     const outputFrame = new Float32Array(this.options.targetFrameSize)
     let outputIndex = 0
     let inputIndex = 0
@@ -79,7 +84,13 @@ export class Resampler {
       outputIndex++
     }
 
-    this.inputBuffer = this.inputBuffer.slice(inputIndex)
-    return outputFrame
+    const rawFrame = new Float32Array(this.inputBuffer.slice(0, inputIndex));
+
+    this.inputBuffer = this.inputBuffer.slice(inputIndex);
+
+    return {
+      resampled: outputFrame,  
+      original:  rawFrame      
+    };
   }
 }

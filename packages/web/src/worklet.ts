@@ -49,10 +49,10 @@ class Processor extends AudioWorkletProcessor {
 
     if (this._initialized && arr instanceof Float32Array) {
       const frames = this.resampler.process(arr)
-      for (const frame of frames) {
+      for (let i = 0; i < frames.resampledBuffer.length; i++) {
         this.port.postMessage(
-          { message: Message.AudioFrame, data: frame.buffer },
-          [frame.buffer]
+          { message: Message.AudioFrame, resampledBuffer: frames.resampledBuffer[i]!.buffer,  originalBuffer: frames.originalBuffer[i]!.buffer},
+          [frames.resampledBuffer[i]!.buffer, frames.originalBuffer[i]!.buffer]
         )
       }
     }
