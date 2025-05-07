@@ -1,5 +1,6 @@
 {
-  "version": "0.0.0",
+  "version": "0.0.1",
+  "name": "halo-vad",
   "license": "ISC",
   "scripts": {
     "build": "npm run build --workspaces --if-present",
